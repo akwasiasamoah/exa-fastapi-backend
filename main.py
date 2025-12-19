@@ -1,6 +1,6 @@
 """
-Main FastAPI application
-Exa API Backend with search, contents, and similarity endpoints
+Main FastAPI application - Simple Search with AI Summary
+Uses Exa for search, web scraping + Claude for content summarization
 """
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,19 +8,18 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import logging
 from datetime import datetime
+import os
 
 from config import settings
 from models import (
     SearchRequest,
     SearchResponse,
-    ContentsRequest,
-    ContentsResponse,
-    FindSimilarRequest,
-    FindSimilarResponse,
+    GenerateSummaryRequest,
+    GenerateSummaryResponse,
     HealthCheckResponse,
-    ErrorResponse,
 )
 from exa_service import exa_service
+from summary_service import summary_service
 
 # Configure logging
 logging.basicConfig(
@@ -46,7 +45,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description="FastAPI backend for Exa AI search API integration",
+    description="FastAPI backend for Exa AI search with Claude-powered summaries",
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
@@ -88,18 +87,20 @@ async def global_exception_handler(request, exc):
 )
 async def health_check():
     """
-    Check API health and Exa API connectivity
+    Check API health and service connectivity
     
-    Returns health status, app info, and Exa API connection status
+    Returns health status, app info, and service connection status
     """
     try:
         exa_connected = await exa_service.health_check()
+        anthropic_connected = summary_service.anthropic_client is not None
         
         return HealthCheckResponse(
-            status="healthy" if exa_connected else "degraded",
+            status="healthy" if (exa_connected and anthropic_connected) else "degraded",
             app_name=settings.app_name,
             version=settings.app_version,
             exa_api_connected=exa_connected,
+            anthropic_api_connected=anthropic_connected,
             timestamp=datetime.utcnow().isoformat()
         )
     except Exception as e:
@@ -109,6 +110,7 @@ async def health_check():
             app_name=settings.app_name,
             version=settings.app_version,
             exa_api_connected=False,
+            anthropic_api_connected=False,
             timestamp=datetime.utcnow().isoformat()
         )
 
@@ -128,8 +130,7 @@ async def root():
         "redoc_url": "/redoc",
         "endpoints": {
             "search": "/api/v1/search",
-            "contents": "/api/v1/contents",
-            "find_similar": "/api/v1/find-similar",
+            "generate_summary": "/api/v1/generate-summary",
             "health": "/health"
         }
     }
@@ -183,159 +184,52 @@ async def search(request: SearchRequest):
         )
 
 
-# ==================== Contents Endpoint ====================
+# ==================== Generate Summary Endpoint ====================
 
 @app.post(
-    "/api/v1/contents",
-    response_model=ContentsResponse,
-    tags=["Contents"],
-    summary="Get full content for URLs or result IDs",
+    "/api/v1/generate-summary",
+    response_model=GenerateSummaryResponse,
+    tags=["Summary"],
+    summary="Generate AI summary for search results",
     status_code=status.HTTP_200_OK
 )
-async def get_contents(request: ContentsRequest):
+async def generate_summary(request: GenerateSummaryRequest):
     """
-    Get full content for specific URLs or Exa result IDs
+    Generate comprehensive AI-powered summary from URLs using Claude
     
-    - **ids**: List of Exa result IDs (from search results)
-    - **urls**: List of URLs to fetch content for
-    - **text**: Include full text content (default: true)
-    - **highlights**: Include relevant highlights (default: false)
-    - **summary**: Include AI-generated summary (default: false)
+    - **urls**: List of URLs to summarize (required, max 5)
+    - **query**: Original search query for context (optional)
+    - **focus_areas**: What to focus on in the summary (optional)
     
-    Note: Either ids or urls must be provided (not both)
+    Uses web scraping + Claude to generate comprehensive summaries
+    even without Exa's paid content features
     
-    Returns full content including text, highlights, and summaries as requested
+    Returns AI-generated summary with source citations
     """
     try:
-        # Validate that at least one is provided
-        if not request.ids and not request.urls:
+        logger.info(f"Generate summary request: {len(request.urls)} URLs")
+        
+        if len(request.urls) > 5:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Either 'ids' or 'urls' must be provided"
+                detail="Maximum 5 URLs per summary request"
             )
         
-        logger.info(f"Contents request: ids={len(request.ids) if request.ids else 0}, "
-                   f"urls={len(request.urls) if request.urls else 0}")
-        
-        result = await exa_service.get_contents(
-            ids=request.ids,
+        result = await summary_service.generate_summary(
             urls=request.urls,
-            text=request.text,
-            highlights=request.highlights,
-            summary=request.summary,
+            query=request.query,
+            focus_areas=request.focus_areas
         )
         
-        return ContentsResponse(**result)
+        return result
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Get contents failed: {str(e)}")
+        logger.error(f"Generate summary failed: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Get contents failed: {str(e)}"
-        )
-
-
-# ==================== Find Similar Endpoint ====================
-
-@app.post(
-    "/api/v1/find-similar",
-    response_model=FindSimilarResponse,
-    tags=["Search"],
-    summary="Find similar content to a given URL",
-    status_code=status.HTTP_200_OK
-)
-async def find_similar(request: FindSimilarRequest):
-    """
-    Find content similar to a given URL using Exa's semantic understanding
-    
-    - **url**: URL to find similar content for (required)
-    - **num_results**: Number of similar results to return (1-100, default: 10)
-    - **exclude_source_domain**: Exclude results from the same domain (default: false)
-    - **category**: Category filter for results
-    - **start_published_date**: Filter results published after this date (YYYY-MM-DD)
-    - **end_published_date**: Filter results published before this date (YYYY-MM-DD)
-    
-    Returns list of similar results ranked by semantic similarity
-    """
-    try:
-        logger.info(f"Find similar request: url={request.url}")
-        
-        result = await exa_service.find_similar(
-            url=request.url,
-            num_results=request.num_results,
-            exclude_source_domain=request.exclude_source_domain,
-            category=request.category,
-            start_published_date=request.start_published_date,
-            end_published_date=request.end_published_date,
-        )
-        
-        return FindSimilarResponse(**result)
-        
-    except Exception as e:
-        logger.error(f"Find similar failed: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Find similar failed: {str(e)}"
-        )
-
-
-# ==================== Batch Search Endpoint (Bonus) ====================
-
-@app.post(
-    "/api/v1/batch-search",
-    tags=["Search"],
-    summary="Perform multiple searches in a single request",
-    status_code=status.HTTP_200_OK
-)
-async def batch_search(queries: list[str], num_results: int = 10):
-    """
-    Perform multiple searches in a single request
-    
-    - **queries**: List of search queries
-    - **num_results**: Number of results per query (default: 10)
-    
-    Returns results for all queries
-    """
-    try:
-        if len(queries) > 10:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Maximum 10 queries per batch request"
-            )
-        
-        logger.info(f"Batch search request: {len(queries)} queries")
-        
-        results = []
-        for query in queries:
-            try:
-                result = await exa_service.search(
-                    query=query,
-                    num_results=num_results,
-                    search_type="auto"
-                )
-                results.append({
-                    "query": query,
-                    "status": "success",
-                    "data": result
-                })
-            except Exception as e:
-                results.append({
-                    "query": query,
-                    "status": "error",
-                    "error": str(e)
-                })
-        
-        return {"results": results}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Batch search failed: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Batch search failed: {str(e)}"
+            detail=f"Summary generation failed: {str(e)}"
         )
 
 

@@ -3,11 +3,12 @@ Configuration module for Exa FastAPI Backend
 Manages environment variables and application settings
 """
 from pydantic_settings import BaseSettings
-from typing import List
+from typing import List,Optional
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
+    anthropic_api_key: Optional[str] = None  
     
     # Exa API Configuration
     exa_api_key: str

@@ -1,394 +1,445 @@
-# Exa FastAPI Backend
+# 🎯 Exa AI Entity Resolution API
 
-A production-ready FastAPI backend application that integrates with Exa AI's powerful search API. Built with best practices for scalability, maintainability, and developer experience.
+**AI-powered entity search with intelligent disambiguation and profile generation**
 
-## 🚀 Features
+Solves the classic "Emmanuel the Software Engineer vs Emmanuel the Dentist" problem using Exa's semantic search and optional Claude AI for clustering.
 
-- **Neural & Keyword Search**: Leverage Exa's semantic and keyword-based search capabilities
-- **Content Retrieval**: Get full webpage content, highlights, and AI-generated summaries
-- **Similarity Search**: Find content similar to any URL
-- **Batch Operations**: Process multiple search queries in a single request
-- **Comprehensive API Documentation**: Auto-generated OpenAPI docs
-- **CORS Support**: Configurable cross-origin resource sharing
-- **Health Checks**: Monitor API and Exa connectivity status
-- **Production-Ready**: Proper error handling, logging, and configuration management
+---
 
-## 📋 Prerequisites
+## ✨ Features
 
-- Python 3.9 or higher
-- Exa API key (get one at [exa.ai](https://exa.ai))
-- pip or conda for package management
+### 🔍 **Entity Search with Disambiguation**
+- Search for people by name with optional "anchor" data (role, company, location)
+- Automatic clustering of results into distinct entities
+- Confidence scoring for each cluster
+- Auto-selection when confidence is high
 
-## 🛠️ Installation
+### 📋 **AI Profile Generation**
+- Generate comprehensive professional profiles
+- AI-powered summaries using Exa's summary API
+- Structured sections (background, expertise, achievements)
+- Citation links to all sources
 
-### 1. Clone or Download the Project
+### 🔗 **Similar Entity Discovery**
+- Find similar people or organizations
+- Semantic similarity matching
+- Optional AI summaries for each result
 
-```bash
-cd exa-fastapi-backend
+### 🎯 **Standard Search Features**
+- Neural (semantic) and keyword search
+- Advanced filtering (domains, dates, categories)
+- Batch search operations
+- Content extraction with highlights
+
+---
+
+## 🏗️ Architecture
+
+Based on the three-stage Entity Resolution pipeline:
+
+```
+┌─────────────┐
+│  1. FETCHER │  Search broadly with Exa
+│             │  (Gets URLs + content + highlights in one call)
+└──────┬──────┘
+       │
+       ↓
+┌─────────────┐
+│ 2. EVALUATOR│  Disambiguate results
+│             │  - Anchor Method: Filter by known facts
+│             │  - Clustering Method: Group by distinct entities
+└──────┬──────┘
+       │
+       ↓
+┌─────────────┐
+│3. SUMMARIZER│  Generate comprehensive profile
+│             │  (AI-powered summary from Exa)
+└─────────────┘
 ```
 
-### 2. Create Virtual Environment
+---
 
-```bash
-# Using venv
-python -m venv venv
+## 🚀 Quick Start
 
-# Activate on Linux/Mac
-source venv/bin/activate
-
-# Activate on Windows
-venv\Scripts\activate
-```
-
-### 3. Install Dependencies
+### **1. Install Dependencies**
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Configure Environment Variables
+### **2. Configure Environment**
 
 ```bash
-# Copy the example env file
 cp .env.example .env
-
-# Edit .env and add your Exa API key
-# EXA_API_KEY=your_actual_api_key_here
 ```
 
-**Required Environment Variables:**
-- `EXA_API_KEY`: Your Exa API key (required)
-
-**Optional Environment Variables:**
-- `APP_NAME`: Application name (default: "Exa FastAPI Backend")
-- `APP_VERSION`: Application version (default: "1.0.0")
-- `DEBUG`: Enable debug mode (default: False)
-- `HOST`: Server host (default: "0.0.0.0")
-- `PORT`: Server port (default: 8000)
-- `CORS_ORIGINS`: Comma-separated CORS origins (default: "http://localhost:3000")
-
-## 🚦 Running the Application
-
-### Development Mode (with auto-reload)
-
-```bash
-python main.py
+Edit `.env`:
+```env
+EXA_API_KEY=your_exa_key_here
+ANTHROPIC_API_KEY=your_anthropic_key_here  # Optional
+CORS_ORIGINS=*
+DEBUG=False
 ```
 
-Or using uvicorn directly:
+### **3. Run the API**
 
 ```bash
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
+# Development
+uvicorn main:app --reload --port 8000
 
-### Production Mode
-
-```bash
+# Production
 uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4
 ```
 
-The API will be available at:
-- **API**: http://localhost:8000
-- **Interactive Docs**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
+### **4. Test the API**
 
-## 📚 API Endpoints
+Visit: http://localhost:8000/docs
 
-### Health Check
+---
 
-```bash
-GET /health
+## 📖 API Endpoints
+
+### **Entity Resolution Endpoints**
+
+#### **1. Entity Search with Disambiguation**
+```http
+POST /api/v1/entity-search
 ```
 
-Check API health and Exa connectivity.
+**With Anchor (High Precision):**
+```json
+{
+  "name": "Emmanuel Asamoah",
+  "anchor": {
+    "role": "Software Engineer",
+    "company": "Hubtel",
+    "location": "Ghana"
+  },
+  "num_results": 20,
+  "auto_select": true
+}
+```
+
+**Without Anchor (Discovery Mode):**
+```json
+{
+  "name": "Emmanuel Asamoah",
+  "num_results": 20
+}
+```
 
 **Response:**
 ```json
 {
-  "status": "healthy",
-  "app_name": "Exa FastAPI Backend",
-  "version": "1.0.0",
-  "exa_api_connected": true,
-  "timestamp": "2025-12-18T10:30:00.000000"
+  "query": "Emmanuel Asamoah Software Engineer Hubtel Ghana",
+  "has_anchor": true,
+  "needs_disambiguation": false,
+  "clusters": [
+    {
+      "cluster_id": "anchor_match",
+      "person_name": "Emmanuel Asamoah",
+      "description": "Software Engineer at Hubtel, Ghana",
+      "confidence": "high",
+      "key_facts": ["Software Engineer", "Hubtel", "Ghana"],
+      "candidates": [
+        {
+          "id": "...",
+          "title": "Emmanuel Asamoah - Lead Backend Engineer | LinkedIn",
+          "url": "https://linkedin.com/in/...",
+          "domain": "linkedin.com",
+          "highlights": [
+            "Lead Backend Engineer at Hubtel",
+            "Specialized in payment processing systems"
+          ],
+          "score": 0.95
+        }
+      ],
+      "total_results": 5
+    }
+  ],
+  "total_candidates": 15,
+  "auto_selected": "anchor_match"
 }
 ```
 
-### Search
+#### **2. Generate Profile**
+```http
+POST /api/v1/generate-profile
+```
 
-```bash
+```json
+{
+  "cluster_id": "anchor_match",
+  "result_ids": ["id1", "id2", "id3"],
+  "focus_areas": [
+    "professional_background",
+    "expertise",
+    "achievements",
+    "education"
+  ]
+}
+```
+
+**Response:**
+```json
+{
+  "cluster_id": "anchor_match",
+  "profile": {
+    "name": "Emmanuel Asamoah",
+    "headline": "Lead Backend Engineer",
+    "summary": "Emmanuel Asamoah is an experienced software engineer...",
+    "sections": [
+      {
+        "title": "Professional Summary",
+        "content": "Comprehensive professional background..."
+      }
+    ],
+    "links": [
+      {"title": "LinkedIn Profile", "url": "..."},
+      {"title": "GitHub", "url": "..."}
+    ],
+    "metadata": {
+      "cluster_id": "anchor_match",
+      "sources": 3
+    },
+    "generated_at": "2025-12-18T10:30:00Z"
+  },
+  "sources_used": 3
+}
+```
+
+#### **3. Find Similar Entities**
+```http
+POST /api/v1/find-similar-entities
+```
+
+```json
+{
+  "url": "https://linkedin.com/in/emmanuel-asamoah",
+  "num_results": 10,
+  "include_summary": true
+}
+```
+
+---
+
+### **Standard Search Endpoints**
+
+#### **Search**
+```http
 POST /api/v1/search
 ```
 
-Search the web using Exa's neural or keyword search.
-
-**Request Body:**
-```json
-{
-  "query": "latest AI developments in Ghana",
-  "num_results": 10,
-  "search_type": "auto",
-  "include_domains": ["techcrunch.com", "wired.com"],
-  "start_published_date": "2025-01-01"
-}
-```
-
-**Response:**
-```json
-{
-  "results": [
-    {
-      "title": "AI Revolution in Ghana",
-      "url": "https://example.com/article",
-      "published_date": "2025-12-01",
-      "author": "John Doe",
-      "score": 0.95,
-      "id": "abc123"
-    }
-  ],
-  "autoprompt_string": null,
-  "request_id": "req_xyz789"
-}
-```
-
-### Get Contents
-
-```bash
+#### **Get Contents**
+```http
 POST /api/v1/contents
 ```
 
-Get full content for URLs or result IDs.
-
-**Request Body:**
-```json
-{
-  "urls": ["https://example.com/article1", "https://example.com/article2"],
-  "text": true,
-  "highlights": true,
-  "summary": false
-}
-```
-
-**Response:**
-```json
-{
-  "results": [
-    {
-      "id": "abc123",
-      "url": "https://example.com/article1",
-      "title": "Article Title",
-      "text": "Full article text content...",
-      "highlights": ["Key point 1", "Key point 2"],
-      "summary": null,
-      "author": "John Doe",
-      "published_date": "2025-12-01"
-    }
-  ],
-  "request_id": "req_xyz789"
-}
-```
-
-### Find Similar
-
-```bash
+#### **Find Similar**
+```http
 POST /api/v1/find-similar
 ```
 
-Find content similar to a given URL.
-
-**Request Body:**
-```json
-{
-  "url": "https://example.com/article",
-  "num_results": 10,
-  "exclude_source_domain": true,
-  "category": "technology"
-}
-```
-
-### Batch Search
-
-```bash
+#### **Batch Search**
+```http
 POST /api/v1/batch-search
 ```
 
-Perform multiple searches in a single request (max 10 queries).
+---
 
-**Request Body:**
-```json
-{
-  "queries": [
-    "artificial intelligence",
-    "machine learning",
-    "neural networks"
-  ],
-  "num_results": 5
-}
-```
+## 💡 Use Cases
 
-## 🧪 Testing the API
-
-### Using cURL
-
-```bash
-# Health check
-curl http://localhost:8000/health
-
-# Search
-curl -X POST http://localhost:8000/api/v1/search \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "FastAPI backend development",
-    "num_results": 5,
-    "search_type": "auto"
-  }'
-
-# Get contents
-curl -X POST http://localhost:8000/api/v1/contents \
-  -H "Content-Type: application/json" \
-  -d '{
-    "urls": ["https://fastapi.tiangolo.com"],
-    "text": true
-  }'
-```
-
-### Using Python
-
+### **1. Sales & Business Development**
 ```python
-import requests
-
-BASE_URL = "http://localhost:8000"
-
-# Search
-response = requests.post(
-    f"{BASE_URL}/api/v1/search",
-    json={
-        "query": "Python FastAPI tutorials",
-        "num_results": 10,
-        "search_type": "neural"
+# Research a prospect before a meeting
+response = requests.post("http://localhost:8000/api/v1/entity-search", json={
+    "name": "John Smith",
+    "anchor": {
+        "company": "TechCorp",
+        "role": "CTO"
     }
-)
-print(response.json())
+})
 
-# Get contents
-response = requests.post(
-    f"{BASE_URL}/api/v1/contents",
-    json={
-        "urls": ["https://example.com"],
-        "text": True,
-        "highlights": True
-    }
-)
-print(response.json())
+# Generate profile/dossier
+profile = requests.post("http://localhost:8000/api/v1/generate-profile", json={
+    "cluster_id": response.json()["auto_selected"],
+    "result_ids": [c["id"] for c in response.json()["clusters"][0]["candidates"]]
+})
 ```
 
-### Using HTTPie
-
-```bash
-# Search
-http POST :8000/api/v1/search \
-  query="machine learning papers" \
-  num_results:=5 \
-  search_type=neural
-
-# Find similar
-http POST :8000/api/v1/find-similar \
-  url=https://example.com/article \
-  num_results:=10
+### **2. Recruitment & Hiring**
+```python
+# Background check on a candidate
+response = requests.post("http://localhost:8000/api/v1/entity-search", json={
+    "name": "Jane Doe",
+    "anchor": {
+        "role": "Data Scientist",
+        "location": "San Francisco"
+    },
+    "include_domains": ["linkedin.com", "github.com"]
+})
 ```
 
-## 📁 Project Structure
+### **3. Journalism & Research**
+```python
+# Research a source
+response = requests.post("http://localhost:8000/api/v1/entity-search", json={
+    "name": "Dr. Sarah Johnson",
+    "num_results": 30
+})
 
-```
-exa-fastapi-backend/
-├── main.py              # FastAPI application and endpoints
-├── config.py            # Configuration and settings management
-├── models.py            # Pydantic models for validation
-├── exa_service.py       # Exa API service layer
-├── requirements.txt     # Python dependencies
-├── .env.example         # Example environment variables
-├── .env                 # Your actual env variables (gitignored)
-└── README.md           # This file
+# User selects correct cluster, then generate profile
+profile = requests.post("http://localhost:8000/api/v1/generate-profile", ...)
 ```
 
-## 🔧 Advanced Configuration
-
-### CORS Configuration
-
-Edit `.env` to configure CORS origins:
-
-```env
-CORS_ORIGINS=http://localhost:3000,https://yourdomain.com,https://app.yourdomain.com
+### **4. Competitive Intelligence**
+```python
+# Find competitors to a company
+similar = requests.post("http://localhost:8000/api/v1/find-similar-entities", json={
+    "url": "https://company.com",
+    "num_results": 20
+})
 ```
 
-### Logging
+---
 
-Logging is configured automatically based on the `DEBUG` setting:
-- `DEBUG=True`: INFO level logging
-- `DEBUG=False`: WARNING level logging
+## 🧠 How Disambiguation Works
 
-### Production Deployment
+### **The "Anchor" Method (High Precision)**
 
-For production deployment, consider:
+When user provides anchor data:
+1. Build semantic query: `"Name + Role + Company + Location"`
+2. Exa's neural search finds semantically relevant results
+3. Filter results that mention anchor facts in highlights
+4. Return single high-confidence cluster
 
-1. **Use a production ASGI server**:
-   ```bash
-   gunicorn main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
-   ```
+**Example:**
+- Query: "Emmanuel Asamoah Software Engineer Hubtel Ghana"
+- Exa automatically excludes footballers, politicians, doctors
+- Returns only tech-related results
 
-2. **Set environment variables**:
-   ```env
-   DEBUG=False
-   CORS_ORIGINS=https://yourdomain.com
-   ```
+### **The "Clustering" Method (Discovery Mode)**
 
-3. **Use a reverse proxy** (Nginx, Caddy)
+When user provides only a name:
+1. Broad search gets 20+ results
+2. Extract highlights (role, company, location) via Exa
+3. Use Claude AI to intelligently cluster into distinct people
+4. Present clusters to user for selection
 
-4. **Enable HTTPS**
+**Optional: LLM-Based Clustering**
 
-5. **Add rate limiting** (set `RATE_LIMIT_ENABLED=True`)
+If `ANTHROPIC_API_KEY` is set:
+- Uses Claude 3.5 Sonnet for intelligent clustering
+- Analyzes highlights to detect distinct identities
+- Handles edge cases and ambiguous data
+
+If not set:
+- Falls back to simple domain-based clustering
+- Still effective for most cases
+
+---
+
+## 🎯 Key Advantages of Using Exa
+
+| **Traditional Approach** | **With Exa** |
+|-------------------------|--------------|
+| SerpApi → URLs | ✅ Exa → URLs + content + highlights (one call) |
+| BeautifulSoup scraping | ✅ Pre-scraped, cleaned content |
+| Manual extraction | ✅ Highlights pre-extracted |
+| Keyword matching | ✅ Semantic/neural search |
+| Build RAG pipeline | ✅ Built-in summary API |
+| Multiple API calls | ✅ Consolidated operations |
+
+---
+
+## 🔧 Configuration Options
+
+### **Environment Variables**
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `EXA_API_KEY` | ✅ Yes | Your Exa API key |
+| `ANTHROPIC_API_KEY` | ❌ Optional | For advanced LLM clustering |
+| `CORS_ORIGINS` | ❌ Optional | Comma-separated allowed origins |
+| `DEBUG` | ❌ Optional | Enable debug mode |
+
+### **Search Parameters**
+
+- **num_results**: 1-100 (default: 20)
+- **include_domains**: Filter by specific domains
+- **exclude_domains**: Exclude specific domains
+- **auto_select**: Auto-select best match if high confidence
+
+---
+
+## 📊 Response Confidence Levels
+
+- **High**: 3+ matching results, strong semantic alignment
+- **Medium**: 1-2 matching results or moderate alignment
+- **Low**: Uncertain or insufficient data
+
+---
 
 ## 🐛 Troubleshooting
 
-### Common Issues
+### **Issue: "Entity service not initialized"**
+- Check that `EXA_API_KEY` is set in `.env`
+- Restart the server
 
-**1. "EXA_API_KEY not found" error**
-- Ensure your `.env` file exists and contains `EXA_API_KEY=your_key`
-- Check that you're running the app from the correct directory
+### **Issue: Clustering returns single cluster**
+- Set `ANTHROPIC_API_KEY` for intelligent clustering
+- Or provide anchor data for better precision
 
-**2. CORS errors in browser**
-- Add your frontend URL to `CORS_ORIGINS` in `.env`
-- Restart the server after changing environment variables
+### **Issue: No results found**
+- Try broader search (remove anchor constraints)
+- Check if name spelling is correct
+- Increase `num_results`
 
-**3. "Module not found" errors**
-- Ensure virtual environment is activated
-- Run `pip install -r requirements.txt` again
+### **Issue: Wrong person in results**
+- Provide more specific anchor data
+- Use `include_domains` to filter sources
+- Add location or company information
 
-**4. Exa API connection fails**
-- Verify your API key is correct
-- Check your internet connection
-- Visit https://exa.ai to verify API status
+---
 
-## 📖 Additional Resources
+## 🚀 Deployment
 
-- [Exa API Documentation](https://docs.exa.ai)
-- [FastAPI Documentation](https://fastapi.tiangolo.com)
-- [Pydantic Documentation](https://docs.pydantic.dev)
+### **Deploy to Render.com**
+
+1. Push code to GitHub
+2. Create new Web Service on Render
+3. Set environment variables:
+   - `EXA_API_KEY`
+   - `ANTHROPIC_API_KEY` (optional)
+   - `CORS_ORIGINS`
+4. Deploy!
+
+See main README for detailed deployment instructions.
+
+---
+
+## 📚 Additional Resources
+
+- **Exa API Docs**: https://docs.exa.ai
+- **Anthropic API Docs**: https://docs.anthropic.com
+- **FastAPI Docs**: https://fastapi.tiangolo.com
+
+---
 
 ## 🤝 Contributing
 
-Feel free to fork and improve this backend! Suggestions for enhancements:
+This is a production-ready implementation. Feel free to:
+- Add more sophisticated clustering algorithms
+- Enhance profile generation with structured data
+- Add export functionality (PDF, JSON, etc.)
+- Implement caching for frequent searches
 
-- Add authentication/API keys
-- Implement caching (Redis)
-- Add rate limiting per client
-- Create Docker container
-- Add comprehensive tests
-- Implement WebSocket support for streaming results
+---
 
-## 📝 License
+## 📄 License
 
-This project is open source and available for use and modification.
+Open source - use freely!
 
-## 👨‍💻 Author
+---
 
-Built with ❤️ for developers integrating Exa AI into their applications.
+**Built with ❤️ using Exa AI, FastAPI, and Claude**

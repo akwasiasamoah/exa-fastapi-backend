@@ -38,9 +38,6 @@ class SearchResult(BaseModel):
     author: Optional[str] = None
     score: Optional[float] = None
     id: str
-    text: Optional[str] = None
-    highlights: Optional[List[str]] = None
-    highlight_scores: Optional[List[float]] = None
 
 
 class SearchResponse(BaseModel):
@@ -50,59 +47,33 @@ class SearchResponse(BaseModel):
     request_id: Optional[str] = None
 
 
-# ==================== Contents Models ====================
+# ==================== Summary Models ====================
 
-class ContentsRequest(BaseModel):
-    """Request model for contents endpoint"""
-    ids: Optional[List[str]] = Field(default=None, description="List of result IDs")
-    urls: Optional[List[str]] = Field(default=None, description="List of URLs")
-    text: bool = Field(default=True, description="Include full text content")
-    highlights: bool = Field(default=False, description="Include highlights")
-    summary: bool = Field(default=False, description="Include AI summary")
-    
-    @field_validator('ids', 'urls')
-    @classmethod
-    def validate_at_least_one(cls, v, info):
-        # Check if at least one of ids or urls is provided
-        if v is None and info.data.get('ids') is None and info.data.get('urls') is None:
-            raise ValueError('Either ids or urls must be provided')
-        return v
+class GenerateSummaryRequest(BaseModel):
+    """Request model for generate summary endpoint"""
+    urls: List[str] = Field(..., min_items=1, max_items=5, description="URLs to summarize (max 5)")
+    query: Optional[str] = Field(default=None, description="Original search query for context")
+    focus_areas: Optional[List[str]] = Field(
+        default=None,
+        description="Areas to focus on (e.g., 'key findings', 'statistics', 'conclusions')"
+    )
 
 
-class ContentResult(BaseModel):
-    """Individual content result"""
-    id: str
+class SourceInfo(BaseModel):
+    """Information about a source used in the summary"""
     url: str
     title: Optional[str] = None
-    text: Optional[str] = None
-    highlights: Optional[List[str]] = None
-    summary: Optional[str] = None
-    author: Optional[str] = None
-    published_date: Optional[str] = None
+    scraped_successfully: bool = True
 
 
-class ContentsResponse(BaseModel):
-    """Response model for contents endpoint"""
-    results: List[ContentResult]
-    request_id: Optional[str] = None
-
-
-# ==================== Find Similar Models ====================
-
-class FindSimilarRequest(BaseModel):
-    """Request model for find similar endpoint"""
-    url: str = Field(..., description="URL to find similar content for")
-    num_results: int = Field(default=10, ge=1, le=100, description="Number of results")
-    exclude_source_domain: bool = Field(default=False, description="Exclude results from same domain")
-    category: Optional[str] = Field(default=None, description="Category filter")
-    start_published_date: Optional[str] = Field(default=None, description="Start date filter")
-    end_published_date: Optional[str] = Field(default=None, description="End date filter")
-
-
-class FindSimilarResponse(BaseModel):
-    """Response model for find similar endpoint"""
-    results: List[SearchResult]
-    request_id: Optional[str] = None
+class GenerateSummaryResponse(BaseModel):
+    """Response model for generate summary endpoint"""
+    summary: str = Field(..., description="AI-generated comprehensive summary")
+    key_points: List[str] = Field(default=[], description="Key points extracted from sources")
+    sources: List[SourceInfo] = Field(default=[], description="Sources used in the summary")
+    query_context: Optional[str] = Field(default=None, description="Original query for context")
+    generated_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    generated_by: str = "claude-sonnet-4"
 
 
 # ==================== Health Check Models ====================
@@ -113,13 +84,5 @@ class HealthCheckResponse(BaseModel):
     app_name: str
     version: str
     exa_api_connected: bool
+    anthropic_api_connected: bool = False
     timestamp: str
-
-
-# ==================== Error Models ====================
-
-class ErrorResponse(BaseModel):
-    """Standard error response"""
-    error: str
-    detail: Optional[str] = None
-    status_code: int
