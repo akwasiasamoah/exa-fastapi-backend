@@ -1,7 +1,7 @@
 """
 Pydantic models for request validation and response serialization
 """
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional, List, Literal
 from datetime import datetime
 
@@ -59,15 +59,12 @@ class GenerateSummaryRequest(BaseModel):
         description="Areas to focus on (e.g., 'key findings', 'statistics', 'conclusions')"
     )
     
-    @field_validator('urls', 'ids')
-    @classmethod
-    def validate_at_least_one(cls, v, info):
+    @model_validator(mode='after')
+    def validate_at_least_one(self):
         # Check if at least one of urls or ids is provided
-        urls = info.data.get('urls')
-        ids = info.data.get('ids')
-        if not urls and not ids:
+        if not self.urls and not self.ids:
             raise ValueError('Either urls or ids must be provided')
-        return v
+        return self
 
 
 class SourceInfo(BaseModel):
