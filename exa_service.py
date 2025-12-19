@@ -225,19 +225,11 @@ class ExaService:
             raise
     
     async def health_check(self) -> bool:
-        """
-        Check if Exa API is accessible
-        
-        Returns:
-            True if API is accessible, False otherwise
-        """
-        try:
-            # Simple test search to verify connection
-            response = self.client.search(query="test", num_results=1)
-            return True
-        except Exception as e:
-            logger.error(f"Health check failed: {str(e)}")
-            return False
+     try:
+        return self.client is not None and settings.exa_api_key is not None
+     except Exception as e:
+        logger.error(f"Health check failed: {str(e)}")
+        return False
 
 
 # Singleton instance

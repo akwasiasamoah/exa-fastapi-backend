@@ -195,28 +195,48 @@ async def search(request: SearchRequest):
 )
 async def generate_summary(request: GenerateSummaryRequest):
     """
-    Generate comprehensive AI-powered summary from URLs using Claude
+    Generate comprehensive AI-powered summary from URLs or Exa result IDs
     
-    - **urls**: List of URLs to summarize (required, max 5)
+    - **urls**: List of URLs to summarize (optional if ids provided)
+    - **ids**: List of Exa result IDs (optional if urls provided, but preferred for speed)
     - **query**: Original search query for context (optional)
     - **focus_areas**: What to focus on in the summary (optional)
     
-    Uses web scraping + Claude to generate comprehensive summaries
-    even without Exa's paid content features
+    Priority: Uses IDs if provided (faster with Exa API), falls back to URLs
     
-    Returns AI-generated summary with source citations
+    Uses 3-tier fallback:
+    1. Exa summary API (fastest, requires paid plan)
+    2. Exa text API + Claude (good quality, requires paid plan)
+    3. Web scraping + Claude (works with free tier, slower)
+    
+    Returns AI-generated summary with key points and source citations
     """
     try:
-        logger.info(f"Generate summary request: {len(request.urls)} URLs")
+        logger.info(f"Generate summary request: urls={len(request.urls or [])} ids={len(request.ids or [])}")
         
-        if len(request.urls) > 5:
+        # Validate at least one is provided
+        if not request.urls and not request.ids:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Either 'urls' or 'ids' must be provided"
+            )
+        
+        # Limit to 5 items
+        if request.urls and len(request.urls) > 5:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Maximum 5 URLs per summary request"
             )
         
+        if request.ids and len(request.ids) > 5:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Maximum 5 IDs per summary request"
+            )
+        
         result = await summary_service.generate_summary(
             urls=request.urls,
+            ids=request.ids,
             query=request.query,
             focus_areas=request.focus_areas
         )

@@ -51,12 +51,23 @@ class SearchResponse(BaseModel):
 
 class GenerateSummaryRequest(BaseModel):
     """Request model for generate summary endpoint"""
-    urls: List[str] = Field(..., min_items=1, max_items=5, description="URLs to summarize (max 5)")
+    urls: Optional[List[str]] = Field(default=None, description="URLs to summarize")
+    ids: Optional[List[str]] = Field(default=None, description="Exa result IDs to summarize")
     query: Optional[str] = Field(default=None, description="Original search query for context")
     focus_areas: Optional[List[str]] = Field(
         default=None,
         description="Areas to focus on (e.g., 'key findings', 'statistics', 'conclusions')"
     )
+    
+    @field_validator('urls', 'ids')
+    @classmethod
+    def validate_at_least_one(cls, v, info):
+        # Check if at least one of urls or ids is provided
+        urls = info.data.get('urls')
+        ids = info.data.get('ids')
+        if not urls and not ids:
+            raise ValueError('Either urls or ids must be provided')
+        return v
 
 
 class SourceInfo(BaseModel):
@@ -73,7 +84,7 @@ class GenerateSummaryResponse(BaseModel):
     sources: List[SourceInfo] = Field(default=[], description="Sources used in the summary")
     query_context: Optional[str] = Field(default=None, description="Original query for context")
     generated_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
-    generated_by: str = "claude-sonnet-4"
+    generated_by: str = "claude-sonnet-4"  # Can be: exa-summary-api, exa-text-api-claude, web-scraping-claude
 
 
 # ==================== Health Check Models ====================
